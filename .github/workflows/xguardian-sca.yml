@@ -1,35 +1,89 @@
-name: XGuardian SCA — Sonatype IQ
+name: XGuardian — IQ Scan + SCA Ingest
 
 on:
-  push:
-    branches: [main, development]
   workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
-  sca-ingest:
+  iq-scan:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Instalar Python
-        uses: actions/setup-python@v5
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          python-version: "3.11"
+          distribution: temurin
+          java-version: "17"
 
-      - name: Gerar CycloneDX via cyclonedx-bom
+      - name: Download Sonatype IQ CLI
         run: |
-          pip install cyclonedx-bom
-          cyclonedx-py requirements requirements.txt \
-            --format json \
-            --output-file cyclonedx.json
-          echo "CycloneDX gerado:"
-          cat cyclonedx.json
+          curl -s -L -o nexus-iq-cli.jar \
+            "https://download.sonatype.com/clm/scanner/nexus-iq-cli-2.9.0-01.jar"
+
+      - name: Executar scan no IQ Server
+        id: iq_scan
+        run: |
+          OUTPUT=$(java -jar nexus-iq-cli.jar \
+            -a "${{ secrets.IQ_USER_TOKEN_CODE }}:${{ secrets.IQ_USER_TOKEN_PASS }}" \
+            -i "fake-python-app" \
+            -s "${{ vars.IQ_SERVER_URL }}" \
+            -t build \
+            . 2>&1) || true
+
+          echo "$OUTPUT"
+
+          REPORT_ID=$(echo "$OUTPUT" | grep -oP '/report/\K[a-zA-Z0-9]+' | head -1 || true)
+
+          if [ -z "$REPORT_ID" ]; then
+            echo "::error::Report ID não encontrado no output do IQ Server"
+            exit 1
+          fi
+
+          echo "report_id=$REPORT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Baixar CycloneDX do IQ Server
+        run: |
+          APP_INTERNAL_ID=$(curl -s \
+            -u "${{ secrets.IQ_USER_TOKEN_CODE }}:${{ secrets.IQ_USER_TOKEN_PASS }}" \
+            "${{ vars.IQ_SERVER_URL }}/api/v2/applications?publicId=fake-python-app" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['applications'][0]['id'])")
+
+          curl -s \
+            -u "${{ secrets.IQ_USER_TOKEN_CODE }}:${{ secrets.IQ_USER_TOKEN_PASS }}" \
+            -H "Accept: application/json" \
+            "${{ vars.IQ_SERVER_URL }}/api/v2/cycloneDx/1.4/${APP_INTERNAL_ID}/stages/build" \
+            -o iq-cyclonedx.json
+
+          echo "Componentes no CycloneDX:"
+          python3 -c "import json; d=json.load(open('iq-cyclonedx.json')); print(len(d.get('components',[])), 'components,', len(d.get('vulnerabilities',[])), 'vulnerabilities')"
+
+      - name: Upload CycloneDX como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iq-cyclonedx-report
+          path: iq-cyclonedx.json
+
+  xguardian-ingest:
+    needs: iq-scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download CycloneDX
+        uses: actions/download-artifact@v4
+        with:
+          name: iq-cyclonedx-report
 
       - name: Enviar para XGuardian
         uses: xmart-xguardian/xguardian-actions/sonatype-iq@development
         with:
           token: ${{ secrets.XGUARDIAN_TOKEN }}
-          report: cyclonedx.json
+          report: iq-cyclonedx.json
           is_development: "true"
