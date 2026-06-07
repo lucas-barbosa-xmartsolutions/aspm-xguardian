@@ -51,15 +51,25 @@ jobs:
 
       - name: Baixar CycloneDX do IQ Server
         run: |
-          APP_INTERNAL_ID=$(curl -s \
+          IQ_URL="${{ vars.IQ_SERVER_URL }}"
+          IQ_URL="${IQ_URL%/}"
+
+          APPS_RESPONSE=$(curl -s \
             -u "${{ secrets.IQ_USER_TOKEN_CODE }}:${{ secrets.IQ_USER_TOKEN_PASS }}" \
-            "${{ vars.IQ_SERVER_URL }}/api/v2/applications?publicId=fake-python-app" \
+            "${IQ_URL}/api/v2/applications?publicId=fake-python-app")
+
+          echo "Resposta da API de aplicações:"
+          echo "${APPS_RESPONSE}"
+
+          APP_INTERNAL_ID=$(echo "${APPS_RESPONSE}" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['applications'][0]['id'])")
+
+          echo "APP_INTERNAL_ID: ${APP_INTERNAL_ID}"
 
           curl -s \
             -u "${{ secrets.IQ_USER_TOKEN_CODE }}:${{ secrets.IQ_USER_TOKEN_PASS }}" \
             -H "Accept: application/json" \
-            "${{ vars.IQ_SERVER_URL }}/api/v2/cycloneDx/1.4/${APP_INTERNAL_ID}/stages/build" \
+            "${IQ_URL}/api/v2/cycloneDx/1.4/${APP_INTERNAL_ID}/stages/build" \
             -o iq-cyclonedx.json
 
           echo "Componentes no CycloneDX:"
