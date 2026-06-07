@@ -1,0 +1,35 @@
+name: XGuardian SCA — Sonatype IQ
+
+on:
+  push:
+    branches: [main, development]
+  workflow_dispatch:
+
+jobs:
+  sca-ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Gerar CycloneDX via cyclonedx-bom
+        run: |
+          pip install cyclonedx-bom
+          cyclonedx-py requirements requirements.txt \
+            --format json \
+            --output-file cyclonedx.json
+          echo "CycloneDX gerado:"
+          cat cyclonedx.json
+
+      - name: Enviar para XGuardian
+        uses: xmart-xguardian/xguardian-actions/sonatype-iq@development
+        with:
+          token: ${{ secrets.XGUARDIAN_TOKEN }}
+          report: cyclonedx.json
+          is_development: "true"
