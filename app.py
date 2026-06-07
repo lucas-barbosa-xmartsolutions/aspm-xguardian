@@ -1,6 +1,6 @@
 from flask import Flask
 import requests
-import sqlalchemy
+import yaml
 
 app = Flask(__name__)
 
