@@ -97,3 +97,4 @@ jobs:
           token: ${{ secrets.XGUARDIAN_TOKEN }}
           report: iq-cyclonedx.json
           is_development: "true"
+          triggered_by: ${{ github.actor }}
