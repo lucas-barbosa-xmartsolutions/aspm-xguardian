@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   iq-scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, lan-iq]
 
     steps:
       - name: Checkout
@@ -33,7 +33,7 @@ jobs:
         run: |
           OUTPUT=$(java -jar nexus-iq-cli.jar \
             -a "${{ secrets.IQ_USER_TOKEN_CODE }}:${{ secrets.IQ_USER_TOKEN_PASS }}" \
-            -i "fake-python-app" \
+            -i "sandbox-application" \
             -s "${{ vars.IQ_SERVER_URL }}" \
             -t build \
             . 2>&1) || true
@@ -56,7 +56,7 @@ jobs:
 
           APPS_RESPONSE=$(curl -s \
             -u "${{ secrets.IQ_USER_TOKEN_CODE }}:${{ secrets.IQ_USER_TOKEN_PASS }}" \
-            "${IQ_URL}/api/v2/applications?publicId=fake-python-app")
+            "${IQ_URL}/api/v2/applications?publicId=sandbox-application")
 
           echo "Resposta da API de aplicações:"
           echo "${APPS_RESPONSE}"
