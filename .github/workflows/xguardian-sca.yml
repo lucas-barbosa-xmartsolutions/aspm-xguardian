@@ -92,7 +92,7 @@ jobs:
           name: iq-cyclonedx-report
 
       - name: Enviar para XGuardian
-        uses: xguardian-actions/actions/sonatype-iq@development
+        uses: xguardian-actions/sonatype-lifecycle-sca@development
         with:
           token: ${{ secrets.XGUARDIAN_TOKEN }}
           report: iq-cyclonedx.json
